@@ -1,5 +1,8 @@
 Revision history for Perl extension HTML::CMTemplate.
 
+0.3  Fri Oct 05 15:50:36 2001
+        - Added a 'while' loop construct
+        - Fixed the handling of 'else' blocks.  A colon is now required.
 0.2.2  Tue Sep 11 11:30:02 2001
         - Cleaned up the distribution (was including built stuff)
 0.2.1  Mon Sep 10 15:00:00 2001

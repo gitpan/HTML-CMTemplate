@@ -1,12 +1,13 @@
 package HTML::CMTemplate;
 
 use strict;
-use constant DEBUG =>       0;
-use constant STDERR_DEBUG =>    0;
-use constant DEBUG_NAME =>  '/tmp/' . __PACKAGE__ . '_debug.log';
 use vars qw($VERSION);
+use vars qw($DEBUG $DEBUG_FILE_NAME);
 
-$VERSION = '0.2.2';
+$VERSION = '0.3';
+
+$DEBUG = 0;
+$DEBUG_FILE_NAME = '';
 
 =head1 NAME
 
@@ -147,8 +148,8 @@ changed.  This is an optimization to reduce needless parsing, since once
 the template is in memory, you can use it over and over again with new
 variables by just changing the variable values in the package namespace.
 
-    NOTE: This behavior can be changed by setting the $t->{checkmode} variable
-    to $HTML::CMTemplate::CHECK_NONE.
+    NOTE: This behavior can be changed by setting the
+    $t->{checkmode} variable to $HTML::CMTemplate::CHECK_NONE.
 
 So, if I wanted to output the template again with a new title, I could simply
 do the following:
@@ -219,8 +220,8 @@ the package's namespace:
     <?=comment
         Note that you can use either 'i' or '$i' here.
         They are equivalent in the for tag.  The echo tag
-        MUST use '$i' because it is outputting a perl expression
-        and is not specially parsed at all.
+        MUST use '$i' because it is outputting a perl
+        expression and is not specially parsed at all.
     ?>
     <?=for i in @list:?>
     <tr><td>Number <?=echo $i?></td></tr>
@@ -317,6 +318,28 @@ Since the only thing that is eaten up in a template is the tag itself, not
 the preceding whitespace, usually you want the loop constructs and other
 kinds of block constructs to be located all the way to the left side.  This
 will ensure that your spacing is really what you think it should be.
+
+I<while>
+
+The tags this loop uses are as follows:
+
+    <?=while --expression--:?>
+    <?=endwhile?>
+
+The I<while> construct is a very simple loop that works like a standard
+while loop in Perl.  This is useful when you are potentially outputting a large
+loop and don't want to get the entire contents of it into memory.  The
+expression in the while loop works just as you would expect it to.  A true
+value means to keep going, and a false one means to stop.
+
+As with all other block structures, you can put anything you like in the
+body of a while construct.
+
+Example (assuming you have created appropriate function references):
+
+    <?=while $items_hanging_around->():?>
+    <?=echo $get_next_item->():?>
+    <?=endwhile?>
 
 I<def>
 
@@ -477,12 +500,7 @@ use FileHandle;
 use File::stat;
 
 BEGIN {
-    if (DEBUG) {
-        $HTML::CMTemplate::debugline = 1;
-        if (STDERR_DEBUG) {
-            *DEBUG_FILE = *STDERR;
-        }
-    }
+    $HTML::CMTemplate::debugline = 1;
 }
 
 package _NODE_;
@@ -681,7 +699,7 @@ package _FOR_;
         $result .= $prepend . "push \@for_list, [$listexpr];\n";
         $result .= $prepend . "push \@for_count, scalar(\@{\$for_list[\$#for_list]});\n";
         $result .= $prepend . "push \@for_index, 0;\n";
-        $result .= $prepend . "TMPLFORBLK: {\n"; # only the loop goes in here
+        $result .= $prepend . "TMPLLOOPBLK: {\n"; # only the loop goes in here
         $result .= $prepend . 
             "foreach my \$$varname (\@{\$for_list[\$#for_list]}) {\n";
         $result .= $self->tpl->output_perl( depth => $depth + 1 );
@@ -697,6 +715,34 @@ package _FOR_;
         $result .= $prepend . "pop \@for_list;\n";
         $result .= $prepend . "pop \@for_count;\n";
         $result .= $prepend . "pop \@for_index;\n";
+
+        return $result;
+    }
+
+package _WHILE_;
+    @_WHILE_::ISA = qw(_NODE_);
+    sub __init__ {
+        my $self = shift;
+        $self->parent( shift() );
+        $self->type( 'blkWHILE' );
+        $self->expr( '' );
+        $self->tpl( _TPL_->new( $self->parent ) );
+    }
+
+    sub output_perl {
+        my $self = shift;
+        my %args = @_;
+        my $depth = $args{'depth'} || 0;
+        my $prepend = $self->__prepend__( $depth );
+        my $result = '';
+
+        my $expr = $self->expr;
+
+        $result .= $prepend . "TMPLLOOPBLK: {\n"; # only the loop goes in here
+        $result .= $prepend . "while ($expr) {\n";
+        $result .= $self->tpl->output_perl( depth => $depth + 1 );
+        $result .= $prepend . "}\n";
+        $result .= $prepend . "}\n";
 
         return $result;
     }
@@ -776,7 +822,7 @@ package _BREAK_;
         my %args = @_;
         my $depth = $args{'depth'} || 0;
         my $prepend = $self->__prepend__( $depth );
-        my $result = $prepend . "last TMPLFORBLK;\n";
+        my $result = $prepend . "last TMPLLOOPBLK;\n";
         return $result;
     }
 
@@ -1176,9 +1222,9 @@ sub __is_included__ {
     }
 }
 
-sub __debug__() {
-    if (DEBUG) { # should be compiled out if DEBUG is 0
-        my $self = shift;
+sub __debug__ {
+    my $self = shift;
+    if ($DEBUG) {
         my $str = shift;
         $str = '*' unless defined($str);
         # If passed an array reference, this should display arguments.
@@ -1190,14 +1236,17 @@ sub __debug__() {
         while (my @a = caller(++$i)) {}
         $i -= 2; # remove the outside scope altogether ('use' at top level)
         my ($a,$b,$c,$funcname) = caller(1);
-        if (!STDERR_DEBUG) {
-            open DEBUG_FILE, ">>" . DEBUG_NAME;
+        if ($DEBUG_FILE_NAME) {
+            open DEBUG_FILE, ">>" . $DEBUG_FILE_NAME;
+        }
+        else {
+            *DEBUG_FILE = *STDERR;
         }
         print DEBUG_FILE (
             sprintf("%05d: ", $HTML::CMTemplate::debugline++) . 
             ". "x$i . "$funcname: " . $str . "\n"
             );
-        if (!STDERR_DEBUG) {
+        if ($DEBUG_FILE_NAME) {
             close DEBUG_FILE;
         }
     }
@@ -1381,6 +1430,14 @@ sub __process_tag__ {
             $self->__onENDFOR__( $contents );
             last SWITCH;
         };
+        'while' eq $name && do {
+            $self->__onWHILE__( $contents );
+            last SWITCH;
+        };
+        'endwhile' eq $name && do {
+            $self->__onENDWHILE__( $contents );
+            last SWITCH;
+        };
         'def' eq $name && do {
             $self->__onDEF__( $contents );
             last SWITCH;
@@ -1516,6 +1573,10 @@ sub __onELSE__ {
 
     # TODO: Throw an error if there is an expression in this.
 
+    unless ($contents =~ /^(\s*):(\s*)$/s ) {
+        $self->__debug__('Invalid contents for an ELSE block (missing colon?)');
+        die ("Invalid contents for an ELSE block: $contents" );
+    }
     # When this tag comes in, we should be inside of a template.
     # This template's direct or indirect parent should be an IF, ELIF, or
     # FOR block (since else can come after for).  We pop off all templates
@@ -1669,6 +1730,75 @@ sub __onENDFOR__ {
         $self->__debug__( "ENDFOR: Popped all templates and ELSE blocks ".
             "and found a $type block instead of a FOR block." );
         die( "ENDFOR: No enclosing FOR block found.  $type found instead." );
+    }
+}
+
+sub __onWHILE__ {
+    my $self = shift;
+    $self->__debug__(\@_);
+    my $contents = shift;
+
+    # We need to check the contents against the definition of a FOR block.
+    # If they are not of the form <varname> in <listexpr> then we can't use it.
+
+    unless( $contents =~ /^(.*):$/s ) {
+        $self->__debug__( 'Invalid contents for a WHILE block' );
+        die( "Invalid contents for a WHILE block: $contents" );
+    }
+
+    my $expr = $1;
+    $self->__debug__( "Found correct contents: expr=$expr" );
+
+    # When we run into one of these, we really need to be inside of
+    # a template since it is a beginning block type.
+    my $node = $self->__top_TPL__( 'WHILE' );
+    # Create a WHILE block and stick it in there.  Create a template as well.
+    my $whilenode = _WHILE_->new( $self );
+    # Fill it up with stuff.
+    $whilenode->expr( $expr );
+    # Add it to the current node:
+    $node->blk( $whilenode );
+    # Push both nodes onto the stack.
+    $self->__push__( $whilenode );
+    $self->__push__( $whilenode->tpl );
+    # Thus we leave expecting a template.
+    $self->__debug__( "WHILE block successfully added.  New stack size: " .
+        $self->__size__ );
+}
+
+sub __onENDWHILE__ {
+    my $self = shift;
+    $self->__debug__(\@_);
+    my $contents = shift;
+
+    # TODO: Throw an error if there are contents.
+
+    # We need to pop off all templates and ELSE blocks.  When we are
+    # done, we should have reached a FOR block.  If not, it's an error.
+    $self->__debug__( "Stack size before removing TPL: " .  $self->__size__ );
+    my $type = $self->__top__()->type;
+    while( $type eq 'TPL' ) {
+        $self->__pop__;
+        $type = $self->__top__()->type;
+    }
+    $self->__debug__( "Stack size after removal: " . $self->__size__ );
+
+    # Now we should be inside of a WHILE block.  Pop it off and return.
+    if ($type eq 'blkWHILE') {
+        $self->__debug__( "Found and removed the parent WHILE block: " .
+            "expr=" . $self->__top__->expr );
+        $self->__pop__;
+        # Now we have stripped it down to the parent template.  This template
+        # might already have text in it, so we need to add another template
+        # to it.  Since the template definition is TEXT + BLK + TPL, and
+        # we just finished a block, we add another template and move stuff
+        # up.
+        $self->__end_block__;
+    }
+    else {
+        $self->__debug__( "ENDWHILE: Popped all templates".
+            "and found a $type block instead of a WHILE block." );
+        die("ENDWHILE: No enclosing WHILE block found.  $type found instead.");
     }
 }
 
@@ -1854,20 +1984,25 @@ sub __onRAWINC__ {
     my $text = '';
     my $mtime = 0;
     if ($self->__exists_raw__( $filename )) {
+        $self->__debug__( 'Raw file $filename already exists: getting it' );
         my $rawrec = $self->__get_raw__( $filename );
         $text = $rawrec->{text};
         $mtime = $rawrec->{mtime};
     }
     else {
+        $self->__debug__( 'Raw file $filename has not been read: getting it' );
         # Get the mtime of this file for future reference.
         my $filestat = stat($filename);
         $mtime = $filestat->mtime;
         # Open and suck the text out.
         local( *FILE );
-        open FILE, "<$filename"
-            || die "Failed to open raw include: $filename\n";
-        my $text = '';
-        while ($text .= <FILE>) {}
+        open FILE, "<$filename" || do {
+            $self->__debug__( 'Failed to open raw file $filename: $!' );
+            die "Failed to open raw include: $filename\n";
+        };
+        local $/;
+        undef $/;
+        $text = <FILE>;
         close FILE;
     }
 
@@ -2017,7 +2152,7 @@ sub __process_block__ {
                 elsif ($tag =~ m/^(\w+)\s*:\s*$/s) {
                     $self->__debug__(
                         "Found an expressionless block tag: $tag" );
-                    $self->__process_tag__($1, '');
+                    $self->__process_tag__($1, ':');
                 }
                 else {
                     # The tag was not of the format <?=name expression?>
@@ -2306,7 +2441,6 @@ sub import_template {
         }
     }
     $self->__debug__( 'Import proceeding (deemed necessary)' );
-    print STDERR "Import proceeding (deemed necessary)\n" if STDERR_DEBUG;
 
     # NOTE that we have two kinds of namespaces.  We have a 'dirty'
     # namespace, which can be cleaned up with the cleanup_namespace function,
@@ -2489,7 +2623,9 @@ package $packagename;
 # without a fully qualified name (the template cannot know what package it is
 # in before it is realized).
 no strict qw(vars);
+BEGIN {
 \$^W=$warn; # Set warning level.
+}
 \$START_SYM = '<?=';
 \$END_SYM = '?>';
 # Pristine and clean namespaces.  Make sure to add entries here as needed.
@@ -2628,6 +2764,7 @@ EOSTR
     block :==
         if_block
         | for_block
+        | while_block
         | def_block
         | comment_tag
         | echo_tag
@@ -2645,6 +2782,9 @@ EOSTR
 
     for_block :==
         for_tag template [ else_tag template ]? endfor_tag
+
+    while_block :==
+        while_tag template endwhile_tag
 
     def_block :==
         def_tag template enddef_tag
@@ -2673,6 +2813,12 @@ EOSTR
 
     endfor_tag :==
         START_SYMBOL OP_ENDFOR WS? end_symbol
+
+    while_tag :==
+        START_SYMBOL OP_WHILE WS simple_expr WS? end_symbol_block
+
+    endwhile_tag :==
+        START_SYMBOL OP_ENDWHILE WS? end_symbol
 
     break_tag :==
         START_SYMBOL OP_BREAK WS? end_symbol
@@ -2754,6 +2900,8 @@ EOSTR
     OP_FOR :== 'for'
     OP_IN :== 'in'
     OP_ENDFOR :== 'endfor'
+    OP_WHILE :== 'while'
+    OP_ENDWHILE :== 'endwhile'
     OP_BREAK :== 'break'
     OP_CONTINUE :== 'continue'
     OP_DEF :== 'def'
