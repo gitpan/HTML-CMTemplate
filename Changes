@@ -1,5 +1,11 @@
 Revision history for Perl extension HTML::CMTemplate.
 
+0.3.1  Sat Oct 06 10:30:10 2001
+        - Removed spurious test.pl script
+        - Fixed to report template compilation errors in a more sane way
+        - Added the following changes (were actually changes from last time)
+        - Fixed the rawinc directive.  It was completely broken.
+        - Added a number of test cases
 0.3  Fri Oct 05 15:50:36 2001
         - Added a 'while' loop construct
         - Fixed the handling of 'else' blocks.  A colon is now required.

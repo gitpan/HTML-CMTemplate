@@ -4,7 +4,6 @@ contrib/ctpl.vim
 Makefile.PL
 MANIFEST
 README
-test.pl
 t/comment.ctpl
 t/comment.t
 t/def.ctpl

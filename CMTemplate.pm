@@ -4,7 +4,7 @@ use strict;
 use vars qw($VERSION);
 use vars qw($DEBUG $DEBUG_FILE_NAME);
 
-$VERSION = '0.3';
+$VERSION = '0.3.1';
 
 $DEBUG = 0;
 $DEBUG_FILE_NAME = '';
@@ -1392,7 +1392,7 @@ sub __top_TPL__ {
     return $node if $node->type eq 'TPL';
 
     my $errormessage = "$nodetype: TPL expected, but " . $node->type .
-        " found";
+        " found\n";
     $self->__debug__( $errormessage );
     die( $errormessage );
 }
@@ -1487,7 +1487,7 @@ sub __process_tag__ {
 #            $self->__onECHO__( $contents );
 #            last SWITCH;
 #        };
-        die( "Unrecognized tag: $name" );
+        die( "Unrecognized tag: $name\n" );
     }
 }
 
@@ -1496,12 +1496,19 @@ sub __onIF__ {
     $self->__debug__(\@_);
     my $contents = shift;
 
-    unless( $contents =~ /^(.*):$/s ) {
+    my $has_colon = $contents =~ /^(.*):$/s;
+    my $expr = $1;
+    my $has_contents = $expr =~ /\S/;
+    if (!$has_colon) {
         $self->__debug__( 
             "Invalid contents for an IF block (missing colon): $contents" );
-        die( "Invalid contents for an IF block: $contents" );
+        die "Invalid contents for an IF block (missing colon?): '$contents'\n";
     }
-    my $expr = $1;
+    if (!$has_contents) {
+        $self->__debug__( 
+            "Invalid contents for an IF block (missing expr): $contents" );
+        die "Invalid contents for an IF block (missing expr?): '$contents'\n";
+    }
 
     # When we run into one of these, we really need to be inside of
     # a template since it is a beginning block type.
@@ -1526,11 +1533,19 @@ sub __onELIF__ {
     $self->__debug__(\@_);
     my $contents = shift;
 
-    unless( $contents =~ /^(.*):$/s ) {
-        $self->__debug__( 'Invalid contents for an ELIF block (missing colon)');
-        die( "Invalid contents for an ELIF block: $contents" );
-    }
+    my $has_colon = $contents =~ /^(.*):$/s;
     my $expr = $1;
+    my $has_contents = $expr =~ /\S/;
+    if (!$has_colon) {
+        $self->__debug__( 
+            "Invalid contents for an ELIF block (missing colon): $contents" );
+        die "Invalid contents for an ELIF block (missing colon?): '$contents'\n";
+    }
+    if (!$has_contents) {
+        $self->__debug__( 
+            "Invalid contents for an ELIF block (missing expr): $contents" );
+        die "Invalid contents for an ELIF block (missing expr?): '$contents'\n";
+    }
     # When this tag comes in, we should be inside of a template.
     # The way that things are set up, we could be inside of multiple levels
     # of templates, so we need to pop them off until we get to the parent IF
@@ -1562,7 +1577,7 @@ sub __onELIF__ {
     else {
         $self->__debug__( 
             'ELIF found with wrong parent block: ' . $node->type);
-        die( 'ELIF found with wrong parent block: '. $node->type);
+        die( 'ELIF found with wrong parent block: '. $node->type . "\n");
     }
 }
 
@@ -1575,7 +1590,8 @@ sub __onELSE__ {
 
     unless ($contents =~ /^(\s*):(\s*)$/s ) {
         $self->__debug__('Invalid contents for an ELSE block (missing colon?)');
-        die ("Invalid contents for an ELSE block: $contents" );
+        die "Invalid contents for an ELSE block (missing colon?):" .
+            "'$contents'\n";
     }
     # When this tag comes in, we should be inside of a template.
     # This template's direct or indirect parent should be an IF, ELIF, or
@@ -1618,7 +1634,7 @@ sub __onELSE__ {
     else {
         $self->__debug__(
             'ELSE found with wrong parent block: ' . $node->type);
-        die( 'ELSE found with wrong parent block: ' . $node->type);
+        die( 'ELSE found with wrong parent block: ' . $node->type . "\n");
     }
 }
 
@@ -1657,7 +1673,7 @@ sub __onENDIF__ {
     else {
         $self->__debug__( "ENDIF: Popped all templates and internal IF blocks ".
             "and found a $type block instead of an IF block." );
-        die( "ENDIF: No enclosing IF block found.  $type found instead." );
+        die( "ENDIF: No enclosing IF block found.  $type found instead.\n" );
     }
 }
 
@@ -1670,8 +1686,8 @@ sub __onFOR__ {
     # If they are not of the form <varname> in <listexpr> then we can't use it.
 
     unless( $contents =~ /^\$?(\w+)\s+in\s+(.*):$/s ) {
-        $self->__debug__( 'Invalid contents for a FOR block' );
-        die( "Invalid contents for a FOR block: $contents" );
+        $self->__debug__( "Invalid contents for a FOR block: $contents" );
+        die( "Invalid contents for a FOR block (missing 'in'?): $contents\n" );
     }
     my ($varname, $listexpr) = ($1, $2);
     $self->__debug__( 
@@ -1729,7 +1745,7 @@ sub __onENDFOR__ {
     else {
         $self->__debug__( "ENDFOR: Popped all templates and ELSE blocks ".
             "and found a $type block instead of a FOR block." );
-        die( "ENDFOR: No enclosing FOR block found.  $type found instead." );
+        die( "ENDFOR: No enclosing FOR block found.  $type found instead.\n" );
     }
 }
 
@@ -1743,7 +1759,7 @@ sub __onWHILE__ {
 
     unless( $contents =~ /^(.*):$/s ) {
         $self->__debug__( 'Invalid contents for a WHILE block' );
-        die( "Invalid contents for a WHILE block: $contents" );
+        die( "Invalid contents for a WHILE block: '$contents'\n" );
     }
 
     my $expr = $1;
@@ -1798,7 +1814,7 @@ sub __onENDWHILE__ {
     else {
         $self->__debug__( "ENDWHILE: Popped all templates".
             "and found a $type block instead of a WHILE block." );
-        die("ENDWHILE: No enclosing WHILE block found.  $type found instead.");
+        die "ENDWHILE: No enclosing WHILE block found.  $type found instead.\n";
     }
 }
 
@@ -1810,7 +1826,8 @@ sub __onDEF__ {
     unless( $contents =~ /^(\w+)\s*\((.*)\)\s*:$/s ) {
         $self->__debug__( 'Invalid contents for a DEF block (needs to be "' .
             'name (arglist):")');
-        die( "Invalid contents for a DEF block: $contents" );
+        die "Invalid contents for a DEF block (should be 'name (arglist)'): " .
+            "'$contents'\n";
     }
     my ($name, $argexpr) = ($1, $2);
     # Get the argument list into an appropriate format.
@@ -1880,13 +1897,13 @@ sub __onENDDEF__ {
             $self->__debug__( "DEF " . $defblk->name . 
                 " already exists in this template!  Aborting.");
             die "Attempted to redefine def '" . $defblk->name . 
-                "' inside of its own template.  Giving up.";
+                "' inside of its own template.  Giving up.\n";
         }
         elsif ($self->__exists_def_global__( $defblk->name )) {
             $self->__debug__( "DEF " . $defblk->name .
                 " already exists in another template!  Aborting.");
             die "Attempted to redefine def '" . $defblk->name .
-                "' inside of " . $self->{filename} . ".  Bad programmer!";
+                "' inside of " . $self->{filename} . ".  Bad programmer!\n";
         }
         $self->__push_def__( $defblk );
         
@@ -1900,7 +1917,7 @@ sub __onENDDEF__ {
     else {
         $self->__debug__( "ENDDEF: Popped all templates ".
             "and found a $type block instead of a DEF block." );
-        die( "ENDDEF: No enclosing DEF block found.  $type found instead." );
+        die( "ENDDEF: No enclosing DEF block found.  $type found instead.\n" );
     }
 }
 
@@ -1911,7 +1928,7 @@ sub __onCALL__ {
 
     unless( $contents =~ /^(\w+)\s*\((.*)\)\s*$/s ) {
         $self->__debug__( "CALL: Improperly formed contents: $contents" );
-        die( "CALL: Improperly formed contents: $contents" );
+        die( "CALL: Improperly formed contents: $contents\n" );
     }
     my ($name, $argexpr) = ($1, $2);
 
@@ -1939,7 +1956,7 @@ sub __onINC__ {
     # Is this file included by its collective ancestry?  If so, die horribly.
     if ($self->__is_included__($filename)) {
         die "Recursive inclusion detected: $filename eventually"
-            . " includes itself";
+            . " includes itself\n";
     }
 
     # Create the include structure and insert it into the tree.
@@ -2326,10 +2343,17 @@ sub open_file {
     $self->{filemodtime} = $sb->mtime;
 
     # Load the file.
+    my $line = 0;
     local(*FILE);
-    open( FILE, "<$fullpath" ) || die "Failed to open $fullpath";
+    open( FILE, "<$fullpath" ) || die "Failed to open $fullpath\n";
     while( <FILE> ) {
-        $self->__process_block__( $_ );
+        ++$line;
+        eval {
+            $self->__process_block__( $_ );
+        };
+        if ($@) {
+            die "PARSE ERROR in '$filename', line $line:\n\t$@\n";
+        }
     }
     close( FILE );
 }
@@ -2469,12 +2493,20 @@ sub import_template {
     if (defined( $ra_cleanref )) {
         foreach my $rh (@$ra_cleanref) {
             eval( "${packagename}::import_hashref( \$rh, 1 )" );
+            if ($@) {
+                die "EVAL ERROR: ${packagename}::import_hashref (clean) " .
+                    "failed: $@\n";
+            }
         }
     }
     # Import refs into the 'dirty' namespace (can be cleaned up)
     if (defined( $ra_dirtyref )) {
         foreach my $rh (@$ra_dirtyref) {
             eval( "${packagename}::import_hashref( \$rh, 0 )" );
+            if ($@) {
+                die "EVAL ERROR: ${packagename}::import_hashref (dirty) " .
+                    "failed: $@\n";
+            }
         }
     }
 
@@ -2517,6 +2549,10 @@ sub import_package {
     #my $perl = $self->output_perl( $package );
     #print STDERR $perl;
     eval( $self->output_perl( packagename => $package, 'warn' => $warn ) );
+    if ($@) {
+        die "EVAL ERROR in import_package: Generated Perl Code for package " .
+            "'$package' failed to compile: $@\n";
+    }
 }
 
 # Outputs the subroutine definitions for a given template.  These are separate
