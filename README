@@ -1,0 +1,13 @@
+HTML::CMTemplate README
+
+This package allows programmers to create templates using PHP-style tags.  The
+template language is very powerful and expressive, and the interpreter is very
+cpu and memory efficient.
+
+It compiles the templates once during program execution and then leaves them
+in memory for very fast realization.
+
+No C compiler is required.  This is a pure, 100% Perl module.
+
+Full documentation comes with it.  Simply type perldoc HTML::CMTemplate
+(or man HTML::CMTemplate) after installation, and you are off and running.
