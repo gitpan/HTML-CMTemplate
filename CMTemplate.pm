@@ -2,12 +2,13 @@ package HTML::CMTemplate;
 
 use strict;
 use vars qw($VERSION);
-use vars qw($DEBUG $DEBUG_FILE_NAME);
 
-$VERSION = '0.3.1';
+$VERSION = '0.4.0';
 
+use vars qw($DEBUG $DEBUG_FILE_NAME $DEBUG_FUNCTION_REF);
 $DEBUG = 0;
 $DEBUG_FILE_NAME = '';
+$DEBUG_FUNCTION_REF = undef;
 
 =head1 NAME
 
@@ -36,7 +37,7 @@ HTML::CMTemplate.pm - Generate text-based content from templates.
 
 =head1 DESCRIPTION
 
-HTML::CMTemplate 0.2
+HTML::CMTemplate 0.4.0
 
 A class for generating text-based content from a simple template language.
 It was inspired by the (as far as I'm concerned, incomplete) HTML::Template
@@ -63,6 +64,28 @@ as open source with the blessing of the controlling entities there.
 =head1 AUTHOR
 
 Chris Monson, shiblon@yahoo.com
+
+=head2 DEBUG OUTPUT
+
+  You can coerce the template engine into spitting out debugging
+  information for every step of the parsing process.  This behavior can be
+  controlled by the following variables:
+
+  $HTML::CMTemplate::DEBUG = 1;  # Do this, and debugging will be turned on
+  $HTML::CMTemplate::DEBUG_FILE_NAME = 'filename'; # Defaults to STDERR
+  $HTML::CMTemplate::DEBUG_FUNCTION_REF = $ref;
+
+  The debug function reference is used for every debug step.  It is passed
+  three parameters: the name of the function being debugged, a string,
+  and an array ref.  If the array is non-empty, it
+  contains the arguments to a function that is being debugged.
+  If the string is non-empty, it contains a message.
+
+  Note that this is of dubious utility.  The debug functions are mostly for
+  my own internal use to see where the template parser goes wrong.  They 
+  do not detect bad template syntax, and they will be of no use to people
+  just making use of the template parser.  Really.  My advice is to leave the
+  debug parameters alone.  You don't need them.
 
 =head2 TEMPLATE SYNTAX
 
@@ -1227,15 +1250,30 @@ sub __debug__ {
     if ($DEBUG) {
         my $str = shift;
         $str = '*' unless defined($str);
-        # If passed an array reference, this should display arguments.
+
+        my $args = [];
+
         if (ref($str) eq "ARRAY") {
-            $str = "Args: " . join( ", ", @$str );
+            $args = $str;
+            $str = '';
         }
         # Find the stack depth - 1
         my $i = 0;
         while (my @a = caller(++$i)) {}
         $i -= 2; # remove the outside scope altogether ('use' at top level)
         my ($a,$b,$c,$funcname) = caller(1);
+
+        # If a debug function ref has been specified, we just call that hook
+        # and don't do anything else.
+        if ($DEBUG_FUNCTION_REF) {
+            $DEBUG_FUNCTION_REF->($funcname, $str, $args);
+            return;
+        }
+        # Now we do default handling
+        # If passed an array reference, this should display arguments.
+        if (ref($str) eq "ARRAY") {
+            $str = "Args: " . join( ", ", @$str );
+        }
         if ($DEBUG_FILE_NAME) {
             open DEBUG_FILE, ">>" . $DEBUG_FILE_NAME;
         }
