@@ -1,4 +1,8 @@
 Revision history for Perl extension HTML::CMTemplate.
 
+0.2.2  Tue Sep 11 11:30:02 2001
+        - Cleaned up the distribution (was including built stuff)
+0.2.1  Mon Sep 10 15:00:00 2001
+        - Added a README file
 0.2  Wed Aug 29 15:33:36 2001
 	- First Open Source version

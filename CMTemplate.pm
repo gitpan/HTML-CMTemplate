@@ -6,7 +6,7 @@ use constant STDERR_DEBUG =>    0;
 use constant DEBUG_NAME =>  '/tmp/' . __PACKAGE__ . '_debug.log';
 use vars qw($VERSION);
 
-$VERSION = '0.2';
+$VERSION = '0.2.2';
 
 =head1 NAME
 
